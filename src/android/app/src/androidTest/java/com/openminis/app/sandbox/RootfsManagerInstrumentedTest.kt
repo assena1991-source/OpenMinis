@@ -118,8 +118,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installIfNeededIsIdempotent() = runBlocking {
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!hasAsset(expectedRootfsAsset)) {
+            println("SKIP: $expectedRootfsAsset not in assets")
             return@runBlocking
         }
 
@@ -137,8 +137,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installIfNeededCleansPartialInstall() = runBlocking {
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!hasAsset(expectedRootfsAsset)) {
+            println("SKIP: $expectedRootfsAsset not in assets")
             return@runBlocking
         }
 
@@ -170,8 +170,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installProotIfNeededIsIdempotent() = runBlocking {
-        if (!hasAsset("proot-aarch64")) {
-            println("SKIP: proot-aarch64 not in assets")
+        if (!hasAsset(expectedProotAsset)) {
+            println("SKIP: $expectedProotAsset not in assets")
             return@runBlocking
         }
 
@@ -220,8 +220,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun resetDeletesAndReinstalls() = runBlocking {
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!hasAsset(expectedRootfsAsset)) {
+            println("SKIP: $expectedRootfsAsset not in assets")
             return@runBlocking
         }
 
@@ -239,8 +239,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun resetKeepsUserDataWhenRequested() = runBlocking {
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!hasAsset(expectedRootfsAsset)) {
+            println("SKIP: $expectedRootfsAsset not in assets")
             return@runBlocking
         }
 
