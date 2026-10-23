@@ -48,11 +48,9 @@ class RootfsManager private constructor(private val context: Context) {
     // Match the guest rootfs to this process ABI. On 64-bit Android devices,
     // a 32-bit-only app process reports false and uses the ARMv7 payload.
     private val is64BitProcess: Boolean get() = Process.is64Bit()
-    private val guestArch: String get() = if (is64BitProcess) "aarch64" else "armhf"
-    private val rootfsAsset: String get() =
-        if (is64BitProcess) ROOTFS_ASSET_64 else ROOTFS_ASSET_32
-    private val rootfsAssetTar: String get() =
-        if (is64BitProcess) ROOTFS_ASSET_TAR_64 else ROOTFS_ASSET_TAR_32
+    private val guestArch: String get() = guestArchFor(is64BitProcess)
+    private val rootfsAsset: String get() = rootfsAssetFor(is64BitProcess)
+    private val rootfsAssetTar: String get() = rootfsAssetTarFor(is64BitProcess)
 
     val isInstalled: Boolean
         get() = rootfsDir.exists() && archFile.exists() &&
@@ -669,6 +667,19 @@ class RootfsManager private constructor(private val context: Context) {
         private const val ROOTFS_ASSET_TAR_32 = "alpine-minirootfs-armv7.tar"
         private const val PROOT_ASSET_64 = "proot-aarch64"
         private const val PROOT_ASSET_32 = "proot-armv7"
+
+        /** Pure ABI mapping, kept internal so both process variants can be unit-tested. */
+        internal fun guestArchFor(is64Bit: Boolean): String =
+            if (is64Bit) "aarch64" else "armhf"
+
+        internal fun rootfsAssetFor(is64Bit: Boolean): String =
+            if (is64Bit) ROOTFS_ASSET_64 else ROOTFS_ASSET_32
+
+        internal fun rootfsAssetTarFor(is64Bit: Boolean): String =
+            if (is64Bit) ROOTFS_ASSET_TAR_64 else ROOTFS_ASSET_TAR_32
+
+        internal fun prootAssetFor(is64Bit: Boolean): String =
+            if (is64Bit) PROOT_ASSET_64 else PROOT_ASSET_32
         private const val DEFAULT_MOUNT_ASSET = "default_mount"
 
         /**
