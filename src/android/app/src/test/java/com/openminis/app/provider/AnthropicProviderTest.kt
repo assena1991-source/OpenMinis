@@ -628,30 +628,26 @@ class AnthropicProviderTest {
     }
 
     @Test
-    fun `OAuth request omits redact-thinking beta so thinking text is not blanked`() = runBlocking {
-        // Mirrors iOS 958ee16c (T-anthropic-redact-thinking). The Claude-Code
-        // mimicry beta set must NOT carry `redact-thinking-2026-02-12`; with it,
-        // the server blanks thinking text (signature only) even though the model
-        // reasons. Omitting it == showThinkingSummaries:true.
+    fun `OAuth request omits redact-thinking beta so thinking text is not blanked`() {
+        // Test request-header construction directly: a public build intentionally
+        // has no private Claude Code system-prompt prefix, so a full OAuth send
+        // would fail before the headers can be inspected.
         val oauthProvider = AnthropicProvider(
             apiKey = "test-oauth-token",
             model = LLMModel.claudeSonnet5,
             basePath = server.url("/").toString().trimEnd('/'),
             isOAuth = true,
         )
-        server.enqueue(MockResponse().setBody("""{"content":[],"usage":{"input_tokens":0,"output_tokens":0}}"""))
-
-        oauthProvider.sendMessage(
-            listOf(LLMMessage(LLMMessage.Role.USER, "hi")), null, 4096,
-            thinkingLevel = ThinkingLevel.MEDIUM,
-        )
-
-        val beta = server.takeRequest().getHeader("anthropic-beta") ?: ""
+        val body = JSONObject().put("thinking", JSONObject().put("type", "adaptive"))
+        val buildRequest = AnthropicProvider::class.java
+            .getDeclaredMethod("buildRequest", String::class.java, JSONObject::class.java)
+            .apply { isAccessible = true }
+        val request = buildRequest.invoke(oauthProvider, body.toString(), body) as okhttp3.Request
+        val beta = request.header("anthropic-beta") ?: ""
         assertTrue(
             "anthropic-beta must not contain redact-thinking; was: $beta",
             !beta.contains("redact-thinking"),
         )
-        // Sanity: the OAuth OAuth betas we DO expect are still present.
         assertTrue("oauth beta present", beta.contains("oauth-2025-04-20"))
     }
 }
