@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# Each commit supersedes prior validation runs for this feature branch. Avoid
+# queueing multiple 90-minute native builds for commits that are already stale.
+concurrency:
+  group: android-armv7-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-arm32-and-arm64:
     runs-on: ubuntu-latest
