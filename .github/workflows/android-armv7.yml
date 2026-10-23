@@ -95,3 +95,12 @@ jobs:
           for abi in arm64-v8a armeabi-v7a; do
             grep -Fx "lib/$abi/libRealtimeCutVadLibrary.so" <<< "$listing"
           done
+
+      - name: Upload validated universal debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openminis-armv7-arm64-debug-apk
+          path: src/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
