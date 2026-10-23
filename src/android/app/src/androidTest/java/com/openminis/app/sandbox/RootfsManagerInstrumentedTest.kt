@@ -48,7 +48,6 @@ class RootfsManagerInstrumentedTest {
     @After
     fun tearDown() {
         manager.rootfsDir.deleteRecursively()
-        manager.prootBinary.parentFile?.deleteRecursively()
         resetSingleton()
     }
 
