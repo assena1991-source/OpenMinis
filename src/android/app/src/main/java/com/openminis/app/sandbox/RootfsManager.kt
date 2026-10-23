@@ -498,6 +498,9 @@ class RootfsManager private constructor(private val context: Context) {
      */
     internal fun extractTar(input: InputStream, targetDir: File) {
         val header = ByteArray(512)
+        // Reuse one payload buffer across every file in the archive; allocating
+        // an 8 KiB array per file adds avoidable GC pressure on first install.
+        val copyBuffer = ByteArray(8192)
 
         while (true) {
             val bytesRead = readFully(input, header)
@@ -545,12 +548,11 @@ class RootfsManager private constructor(private val context: Context) {
                     outFile.parentFile?.mkdirs()
                     outFile.outputStream().use { output ->
                         var remaining = size
-                        val buf = ByteArray(8192)
                         while (remaining > 0) {
-                            val toRead = minOf(buf.size.toLong(), remaining).toInt()
-                            val n = input.read(buf, 0, toRead)
+                            val toRead = minOf(copyBuffer.size.toLong(), remaining).toInt()
+                            val n = input.read(copyBuffer, 0, toRead)
                             if (n < 0) break
-                            output.write(buf, 0, n)
+                            output.write(copyBuffer, 0, n)
                             remaining -= n
                         }
                     }
@@ -566,11 +568,18 @@ class RootfsManager private constructor(private val context: Context) {
                     continue // Already consumed data + padding
                 }
                 '1' -> {
-                    // Hard link — create a copy
+                    // Preserve tar hard links instead of duplicating their data.
+                    // Alpine packages commonly use hard links; copying each one
+                    // inflates install I/O and storage. Fall back to a copy only
+                    // when the filesystem or archive ordering prevents linking.
                     outFile.parentFile?.mkdirs()
                     val linkTarget = File(targetDir, linkName)
                     if (linkTarget.exists()) {
-                        linkTarget.copyTo(outFile, overwrite = true)
+                        try {
+                            java.nio.file.Files.createLink(outFile.toPath(), linkTarget.toPath())
+                        } catch (_: Exception) {
+                            linkTarget.copyTo(outFile, overwrite = true)
+                        }
                     }
                 }
                 else -> {
