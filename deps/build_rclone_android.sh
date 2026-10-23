@@ -9,20 +9,14 @@
 # `backend/all` (all 70 backends). We bind ./gomobile instead, which re-exports
 # the same API against the trimmed backend list in backends/backends.go.
 #
-# Output: deps/build/rclone/rclone.aar
-# Consume it by copying the .so into src/android/app/src/main/jniLibs/arm64-v8a/
-# (the same place libproot.so lives), or by importing the .aar directly.
+# Output: src/android/app/libs/rclone.aar
+# Build both supported Android ARM ABIs into one AAR so Gradle can package the
+# matching Go shared library for either process architecture.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/deps/rclone-mobile"
 BUILD="$ROOT/deps/build/rclone"
-TARGET_ABI="${OPENMINIS_ANDROID_ABI:-arm64-v8a}"
-case "$TARGET_ABI" in
-  arm64-v8a) GOMOBILE_TARGET="android/arm64" ;;
-  armeabi-v7a) GOMOBILE_TARGET="android/arm" ;;
-  *) echo "error: unsupported OPENMINIS_ANDROID_ABI='$TARGET_ABI' (expected arm64-v8a or armeabi-v7a)" >&2; exit 1 ;;
-esac
 
 command -v go >/dev/null || { echo "error: go toolchain not found" >&2; exit 1; }
 command -v gomobile >/dev/null || {
@@ -37,14 +31,16 @@ command -v gomobile >/dev/null || {
 mkdir -p "$BUILD"
 cd "$SRC"
 
-# Build one ABI per invocation, matching OPENMINIS_ANDROID_ABI in build_proot.sh.
+# Package both ABIs in a single AAR so Gradle selects the correct Go library.
 gomobile bind -v \
-  -target="$GOMOBILE_TARGET" \
+  -target=android/arm,arm64 \
   -androidapi 24 \
   -javapkg=com.openminis.rclone \
   -ldflags="-s -w" \
-  -o "$BUILD/rclone-$TARGET_ABI.aar" \
+  -o "$BUILD/rclone.aar" \
   ./gomobile
 
-echo "==> $BUILD/rclone-$TARGET_ABI.aar"
-du -sh "$BUILD/rclone-$TARGET_ABI.aar" | awk '{print "    size:", $1}'
+mkdir -p "$ROOT/src/android/app/libs"
+cp "$BUILD/rclone.aar" "$ROOT/src/android/app/libs/rclone.aar"
+echo "==> $ROOT/src/android/app/libs/rclone.aar"
+du -sh "$ROOT/src/android/app/libs/rclone.aar" | awk '{print "    size:", $1}'
