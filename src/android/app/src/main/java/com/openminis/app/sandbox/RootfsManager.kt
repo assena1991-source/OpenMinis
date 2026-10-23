@@ -1,6 +1,7 @@
 package com.openminis.app.sandbox
 
 import android.content.Context
+import android.os.Process
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.util.Log
@@ -44,9 +45,18 @@ class RootfsManager private constructor(private val context: Context) {
 
     private val archFile: File get() = File(rootfsDir, ".arch")
 
+    // Match the guest rootfs to this process ABI. On 64-bit Android devices,
+    // a 32-bit-only app process reports false and uses the ARMv7 payload.
+    private val is64BitProcess: Boolean get() = Process.is64Bit()
+    private val guestArch: String get() = if (is64BitProcess) "aarch64" else "armhf"
+    private val rootfsAsset: String get() =
+        if (is64BitProcess) ROOTFS_ASSET_64 else ROOTFS_ASSET_32
+    private val rootfsAssetTar: String get() =
+        if (is64BitProcess) ROOTFS_ASSET_TAR_64 else ROOTFS_ASSET_TAR_32
+
     val isInstalled: Boolean
         get() = rootfsDir.exists() && archFile.exists() &&
-                archFile.readText().trim() == ARCH
+                archFile.readText().trim() == guestArch
 
     /**
      * Observable install progress. UI layers (OnboardingScreen,
@@ -85,10 +95,11 @@ class RootfsManager private constructor(private val context: Context) {
             // Extract rootfs from assets.
             // AAPT may decompress .tar.gz → .tar automatically, so try both names.
             val assetName = try {
-                context.assets.open(ROOTFS_ASSET).close()
-                ROOTFS_ASSET
+                context.assets.open(rootfsAsset).close()
+                rootfsAsset
             } catch (_: java.io.FileNotFoundException) {
-                ROOTFS_ASSET_TAR
+                context.assets.open(rootfsAssetTar).close()
+                rootfsAssetTar
             }
 
             // Asset size for progress calculation — compressed length (for .gz)
@@ -120,7 +131,7 @@ class RootfsManager private constructor(private val context: Context) {
             _installState.value = RootfsInstallState.Finalizing
 
             // Write arch marker
-            archFile.writeText(ARCH)
+            archFile.writeText(guestArch)
 
             // Pre-create /var/minis directories. Mirrors iOS
             // RootfsManager.swift:76-80 (attachments/offloads/workspace/skills/
@@ -652,10 +663,12 @@ class RootfsManager private constructor(private val context: Context) {
 
     companion object {
         private const val TAG = "RootfsManager"
-        private const val ARCH = "aarch64"
-        private const val ROOTFS_ASSET = "alpine-minirootfs.tar.gz"
-        private const val ROOTFS_ASSET_TAR = "alpine-minirootfs.tar"
-        private const val PROOT_ASSET = "proot-aarch64"
+        private const val ROOTFS_ASSET_64 = "alpine-minirootfs.tar.gz"
+        private const val ROOTFS_ASSET_TAR_64 = "alpine-minirootfs.tar"
+        private const val ROOTFS_ASSET_32 = "alpine-minirootfs-armv7.tar.gz"
+        private const val ROOTFS_ASSET_TAR_32 = "alpine-minirootfs-armv7.tar"
+        private const val PROOT_ASSET_64 = "proot-aarch64"
+        private const val PROOT_ASSET_32 = "proot-armv7"
         private const val DEFAULT_MOUNT_ASSET = "default_mount"
 
         /**
