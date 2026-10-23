@@ -33,7 +33,7 @@ cd "$SRC"
 
 # Package both ABIs in a single AAR so Gradle selects the correct Go library.
 gomobile bind -v \
-  -target=android/arm,arm64 \
+  -target=android/arm,android/arm64 \
   -androidapi 24 \
   -javapkg=com.openminis.rclone \
   -ldflags="-s -w" \
