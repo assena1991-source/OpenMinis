@@ -9,9 +9,9 @@
 # `backend/all` (all 70 backends). We bind ./gomobile instead, which re-exports
 # the same API against the trimmed backend list in backends/backends.go.
 #
-# Output: deps/build/rclone/rclone.aar
-# Consume it by copying the .so into src/android/app/src/main/jniLibs/arm64-v8a/
-# (the same place libproot.so lives), or by importing the .aar directly.
+# Output: src/android/app/libs/rclone.aar
+# Build both supported Android ARM ABIs into one AAR so Gradle can package the
+# matching Go shared library for either process architecture.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -31,14 +31,16 @@ command -v gomobile >/dev/null || {
 mkdir -p "$BUILD"
 cd "$SRC"
 
-# arm64-v8a only, matching the app's existing ndk abiFilters.
+# Package both ABIs in a single AAR so Gradle selects the correct Go library.
 gomobile bind -v \
-  -target=android/arm64 \
+  -target=android/arm,android/arm64 \
   -androidapi 24 \
   -javapkg=com.openminis.rclone \
   -ldflags="-s -w" \
   -o "$BUILD/rclone.aar" \
   ./gomobile
 
-echo "==> $BUILD/rclone.aar"
-du -sh "$BUILD/rclone.aar" | awk '{print "    size:", $1}'
+mkdir -p "$ROOT/src/android/app/libs"
+cp "$BUILD/rclone.aar" "$ROOT/src/android/app/libs/rclone.aar"
+echo "==> $ROOT/src/android/app/libs/rclone.aar"
+du -sh "$ROOT/src/android/app/libs/rclone.aar" | awk '{print "    size:", $1}'

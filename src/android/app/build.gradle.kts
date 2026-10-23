@@ -57,7 +57,7 @@ android {
         )
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
 
         externalNativeBuild {
@@ -135,7 +135,7 @@ android {
     }
 
     androidResources {
-        noCompress += listOf("tar.gz", "proot-aarch64")
+        noCompress += listOf("tar.gz", "proot-aarch64", "proot-armv7")
     }
 
     testOptions {
@@ -307,8 +307,9 @@ dependencies {
     // [T-android-vad] Silero v5 VAD (ONNX Runtime + WebRTC APM). The Android
     // build of the exact library iOS uses via SPM, from the same author, so
     // both platforms share one model and one set of thresholds. Carries
-    // native .so payloads for ONNX Runtime and the APM — see the abiFilters
-    // note in `ndk`; we ship arm64-v8a only.
+    // native .so payloads for ONNX Runtime and the APM. The upstream library
+    // build declares arm64-v8a and armeabi-v7a; the ARMv7 CI job verifies that
+    // the resolved AAR actually contributes both native-library slices.
     implementation("com.github.helloooideeeeea:RealTimeCutVADLibraryForAndroid:1.0.5@aar")
 
     // rclone, via its official gomobile binding, for backup destinations

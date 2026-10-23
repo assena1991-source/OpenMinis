@@ -1,6 +1,7 @@
 package com.openminis.app.sandbox
 
 import android.content.Context
+import android.os.Process
 import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.util.Log
@@ -44,9 +45,16 @@ class RootfsManager private constructor(private val context: Context) {
 
     private val archFile: File get() = File(rootfsDir, ".arch")
 
+    // Match the guest rootfs to this process ABI. On 64-bit Android devices,
+    // a 32-bit-only app process reports false and uses the ARMv7 payload.
+    private val is64BitProcess: Boolean get() = Process.is64Bit()
+    private val guestArch: String get() = guestArchFor(is64BitProcess)
+    private val rootfsAsset: String get() = rootfsAssetFor(is64BitProcess)
+    private val rootfsAssetTar: String get() = rootfsAssetTarFor(is64BitProcess)
+
     val isInstalled: Boolean
         get() = rootfsDir.exists() && archFile.exists() &&
-                archFile.readText().trim() == ARCH
+                archFile.readText().trim() == guestArch
 
     /**
      * Observable install progress. UI layers (OnboardingScreen,
@@ -85,10 +93,11 @@ class RootfsManager private constructor(private val context: Context) {
             // Extract rootfs from assets.
             // AAPT may decompress .tar.gz → .tar automatically, so try both names.
             val assetName = try {
-                context.assets.open(ROOTFS_ASSET).close()
-                ROOTFS_ASSET
+                context.assets.open(rootfsAsset).close()
+                rootfsAsset
             } catch (_: java.io.FileNotFoundException) {
-                ROOTFS_ASSET_TAR
+                context.assets.open(rootfsAssetTar).close()
+                rootfsAssetTar
             }
 
             // Asset size for progress calculation — compressed length (for .gz)
@@ -120,7 +129,7 @@ class RootfsManager private constructor(private val context: Context) {
             _installState.value = RootfsInstallState.Finalizing
 
             // Write arch marker
-            archFile.writeText(ARCH)
+            archFile.writeText(guestArch)
 
             // Pre-create /var/minis directories. Mirrors iOS
             // RootfsManager.swift:76-80 (attachments/offloads/workspace/skills/
@@ -489,6 +498,9 @@ class RootfsManager private constructor(private val context: Context) {
      */
     internal fun extractTar(input: InputStream, targetDir: File) {
         val header = ByteArray(512)
+        // Reuse one payload buffer across every file in the archive; allocating
+        // an 8 KiB array per file adds avoidable GC pressure on first install.
+        val copyBuffer = ByteArray(8192)
 
         while (true) {
             val bytesRead = readFully(input, header)
@@ -536,12 +548,11 @@ class RootfsManager private constructor(private val context: Context) {
                     outFile.parentFile?.mkdirs()
                     outFile.outputStream().use { output ->
                         var remaining = size
-                        val buf = ByteArray(8192)
                         while (remaining > 0) {
-                            val toRead = minOf(buf.size.toLong(), remaining).toInt()
-                            val n = input.read(buf, 0, toRead)
+                            val toRead = minOf(copyBuffer.size.toLong(), remaining).toInt()
+                            val n = input.read(copyBuffer, 0, toRead)
                             if (n < 0) break
-                            output.write(buf, 0, n)
+                            output.write(copyBuffer, 0, n)
                             remaining -= n
                         }
                     }
@@ -557,11 +568,18 @@ class RootfsManager private constructor(private val context: Context) {
                     continue // Already consumed data + padding
                 }
                 '1' -> {
-                    // Hard link — create a copy
+                    // Preserve tar hard links instead of duplicating their data.
+                    // Alpine packages commonly use hard links; copying each one
+                    // inflates install I/O and storage. Fall back to a copy only
+                    // when the filesystem or archive ordering prevents linking.
                     outFile.parentFile?.mkdirs()
                     val linkTarget = File(targetDir, linkName)
                     if (linkTarget.exists()) {
-                        linkTarget.copyTo(outFile, overwrite = true)
+                        try {
+                            java.nio.file.Files.createLink(outFile.toPath(), linkTarget.toPath())
+                        } catch (_: Exception) {
+                            linkTarget.copyTo(outFile, overwrite = true)
+                        }
                     }
                 }
                 else -> {
@@ -652,10 +670,25 @@ class RootfsManager private constructor(private val context: Context) {
 
     companion object {
         private const val TAG = "RootfsManager"
-        private const val ARCH = "aarch64"
-        private const val ROOTFS_ASSET = "alpine-minirootfs.tar.gz"
-        private const val ROOTFS_ASSET_TAR = "alpine-minirootfs.tar"
-        private const val PROOT_ASSET = "proot-aarch64"
+        private const val ROOTFS_ASSET_64 = "alpine-minirootfs.tar.gz"
+        private const val ROOTFS_ASSET_TAR_64 = "alpine-minirootfs.tar"
+        private const val ROOTFS_ASSET_32 = "alpine-minirootfs-armv7.tar.gz"
+        private const val ROOTFS_ASSET_TAR_32 = "alpine-minirootfs-armv7.tar"
+        private const val PROOT_ASSET_64 = "proot-aarch64"
+        private const val PROOT_ASSET_32 = "proot-armv7"
+
+        /** Pure ABI mapping, kept internal so both process variants can be unit-tested. */
+        internal fun guestArchFor(is64Bit: Boolean): String =
+            if (is64Bit) "aarch64" else "armhf"
+
+        internal fun rootfsAssetFor(is64Bit: Boolean): String =
+            if (is64Bit) ROOTFS_ASSET_64 else ROOTFS_ASSET_32
+
+        internal fun rootfsAssetTarFor(is64Bit: Boolean): String =
+            if (is64Bit) ROOTFS_ASSET_TAR_64 else ROOTFS_ASSET_TAR_32
+
+        internal fun prootAssetFor(is64Bit: Boolean): String =
+            if (is64Bit) PROOT_ASSET_64 else PROOT_ASSET_32
         private const val DEFAULT_MOUNT_ASSET = "default_mount"
 
         /**

@@ -20,18 +20,32 @@ ASSETS_DIR="$PROJECT_ROOT/src/android/app/src/main/assets"
 
 ALPINE_VERSION="3.21"
 ALPINE_RELEASE="3.21.3"
-ALPINE_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/aarch64/alpine-minirootfs-${ALPINE_RELEASE}-aarch64.tar.gz"
+TARGET_ABI="${OPENMINIS_ANDROID_ABI:-arm64-v8a}"
+case "$TARGET_ABI" in
+    arm64-v8a)
+        ALPINE_ARCH="aarch64"
+        ROOTFS_NAME="alpine-minirootfs.tar.gz"
+        PROOT_NAME="proot-aarch64"
+        ;;
+    armeabi-v7a)
+        ALPINE_ARCH="armhf"
+        ROOTFS_NAME="alpine-minirootfs-armv7.tar.gz"
+        PROOT_NAME="proot-armv7"
+        ;;
+    *) echo "Unsupported OPENMINIS_ANDROID_ABI='$TARGET_ABI'" >&2; exit 1 ;;
+esac
+ALPINE_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/${ALPINE_ARCH}/alpine-minirootfs-${ALPINE_RELEASE}-${ALPINE_ARCH}.tar.gz"
 
 mkdir -p "$ASSETS_DIR"
 
-ROOTFS_FILE="$ASSETS_DIR/alpine-minirootfs.tar.gz"
-PROOT_FILE="$ASSETS_DIR/proot-aarch64"
+ROOTFS_FILE="$ASSETS_DIR/$ROOTFS_NAME"
+PROOT_FILE="$ASSETS_DIR/$PROOT_NAME"
 
 # --- Alpine rootfs ---
 if [ -f "$ROOTFS_FILE" ]; then
     echo "✓ Alpine rootfs already exists: $ROOTFS_FILE"
 else
-    echo "Downloading Alpine Linux ${ALPINE_RELEASE} aarch64 minirootfs..."
+    echo "Downloading Alpine Linux ${ALPINE_RELEASE} ${ALPINE_ARCH} minirootfs..."
     curl -fSL -o "$ROOTFS_FILE" "$ALPINE_URL"
     echo "✓ Downloaded: $ROOTFS_FILE ($(du -h "$ROOTFS_FILE" | cut -f1))"
 fi

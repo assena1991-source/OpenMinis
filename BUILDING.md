@@ -169,16 +169,17 @@ xcodebuild -project src/ios/Minis.xcodeproj -scheme Minis \
 Gradle itself comes from the wrapper (Gradle 8.11.1, AGP 8.7.3, Kotlin 2.1.0) —
 do not install it separately.
 
-Only `arm64-v8a` is built (`abiFilters`), so use an arm64 device or emulator
-image.
+The Android build targets `arm64-v8a` and `armeabi-v7a`. The ARMv7 path is
+experimental until the CI build and a real 32-bit device smoke test pass.
 
 ### 1. Build the native dependencies
 
 ```sh
-./deps/build_proot.sh              # → assets/proot-aarch64, jniLibs/arm64-v8a/*.so
-./scripts/prepare_android_sandbox.sh   # → assets/alpine-minirootfs.tar.gz
-./deps/build_rclone_android.sh     # → deps/build/rclone/rclone.aar
-mkdir -p src/android/app/libs && cp deps/build/rclone/rclone.aar src/android/app/libs/
+./deps/build_proot.sh              # → ARM64 PRoot + jniLibs/arm64-v8a/*.so
+OPENMINIS_ANDROID_ABI=armeabi-v7a ./deps/build_proot.sh clean  # → ARMv7 PRoot + jniLibs/armeabi-v7a/*.so
+./scripts/prepare_android_sandbox.sh
+OPENMINIS_ANDROID_ABI=armeabi-v7a ./scripts/prepare_android_sandbox.sh
+./deps/build_rclone_android.sh     # → app/libs/rclone.aar (ARM + ARM64)
 ```
 
 - **`build_proot.sh`** cross-compiles a static `libtalloc` and the
@@ -258,8 +259,7 @@ FFmpeg build log, or the `yadif_videotoolbox` filter is absent — install it wi
 `./deps/build_ffmpeg.sh`.
 
 **Android: `Could not find :rclone:`** — `rclone.aar` is not in
-`src/android/app/libs/`. Run `./deps/build_rclone_android.sh` and copy
-`deps/build/rclone/rclone.aar` there.
+`src/android/app/libs/`. Run `./deps/build_rclone_android.sh`.
 
 **Android: `Android NDK not found`** — set `ANDROID_NDK_HOME` to your NDK r28+
 installation, e.g.

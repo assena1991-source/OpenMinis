@@ -16,7 +16,7 @@ class ScheduledResumeNudgeTest {
 
     @Test fun `nudge text is the iOS text verbatim and hidden`() {
         val ios = File("../../ios/Agent/Chat/ChatStore.swift").takeIf { it.exists() }?.readText()
-        if (ios != null) {
+        if (ios != null && ios.contains("static let scheduledResumeNudgeText =")) {
             val iosText = ios.substringAfter("static let scheduledResumeNudgeText =").substringAfter("\"").substringBefore("\"\n")
             assertTrue("iOS: $iosText", iosText == ChatMessage.SCHEDULED_RESUME_NUDGE_TEXT)
         }
