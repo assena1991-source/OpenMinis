@@ -76,9 +76,20 @@ jobs:
       - name: Build combined ARM and ARM64 rclone AAR
         run: ./deps/build_rclone_android.sh
 
-      - name: Run unit tests and build APK
+      - name: Run JVM unit tests
         working-directory: src/android
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
+        timeout-minutes: 20
+        run: ./gradlew --console=plain --stacktrace :app:testDebugUnitTest
+
+      - name: Assemble debug APK
+        working-directory: src/android
+        timeout-minutes: 45
+        run: ./gradlew --console=plain --stacktrace :app:assembleDebug
+
+      - name: Assemble Android test APK
+        working-directory: src/android
+        timeout-minutes: 20
+        run: ./gradlew --console=plain --stacktrace :app:assembleDebugAndroidTest
 
       - name: Verify APK contains both ABIs and sandbox assets
         working-directory: src/android
