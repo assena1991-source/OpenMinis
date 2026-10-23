@@ -181,32 +181,6 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
-// CI and developer setup download these Alpine archives into src/main/assets,
-// but they are generated, gitignored inputs. Copy them into a declared Gradle
-// output and register that output as an asset source so they are reliably
-// included in every APK variant. Keeping the source files out of the APK
-// pipeline's implicit source scan caused valid downloads to be omitted.
-val stageAlpineRootfsAssets by tasks.registering(Copy::class) {
-    val alpineArchives = listOf(
-        layout.projectDirectory.file("src/main/assets/alpine-minirootfs.tar.gz").asFile,
-        layout.projectDirectory.file("src/main/assets/alpine-minirootfs-armv7.tar.gz").asFile,
-    )
-    from(alpineArchives)
-    into(layout.buildDirectory.dir("generated/alpineRootfsAssets"))
-    doFirst {
-        alpineArchives.forEach { archive ->
-            check(archive.isFile) {
-                "Required Alpine rootfs asset is missing: $archive. Run scripts/prepare_android_sandbox.sh."
-            }
-        }
-    }
-}
-android.sourceSets.getByName("main").assets.srcDir(
-    layout.buildDirectory.dir("generated/alpineRootfsAssets")
-)
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
-    .configureEach { dependsOn(stageAlpineRootfsAssets) }
-
 // [T-bash-on-demand] Keep the shared bashism rule table / test vectors as a
 // SINGLE source of truth (src/shared/bashism) — copy into assets at build
 // time instead of committing duplicate JSON. iOS references the same files as
