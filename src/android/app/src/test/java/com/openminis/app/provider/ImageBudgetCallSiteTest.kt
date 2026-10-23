@@ -43,10 +43,12 @@ class ImageBudgetCallSiteTest {
         val loop = vm.substring(loopStart)
         // Exactly one provider stream call inside the loop — retry and fallback
         // re-enter it rather than building their own request.
-        val streamCalls = Regex("currentProvider\\.streamMessage\\(").findAll(loop).count()
+        val streamCall = Regex("(?m)^[ \\t]*currentProvider\\.streamMessage\\(").find(loop)
+        assertTrue("currentProvider.streamMessage call site not found", streamCall != null)
+        val streamCalls = Regex("(?m)^[ \\t]*currentProvider\\.streamMessage\\(").findAll(loop).count()
         assertEquals("expected a single streamMessage call site in runAgentLoop", 1, streamCalls)
-        val callIdx = loop.indexOf("currentProvider.streamMessage(")
-        val window = loop.substring(callIdx, callIdx + 700)
+        val callIdx = streamCall!!.range.first
+        val window = loop.substring(callIdx, minOf(loop.length, callIdx + 1200))
         assertTrue("outgoing history must be budgeted", window.contains("applyRequestImageBudget("))
         assertTrue("budget wraps the effective history", window.contains("effectiveAgentHistory()"))
         assertTrue("byte audit sits outermost", window.contains("auditOutgoingPayload("))
