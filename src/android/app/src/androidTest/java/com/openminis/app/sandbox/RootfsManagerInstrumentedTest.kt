@@ -84,7 +84,7 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installIfNeededExtractsRootfsFromAssets() = runBlocking {
-        // This test requires alpine-minirootfs.tar.gz in assets.
+        // This test requires the rootfs asset for the active process ABI.
         // Skip if not present (CI or pre-asset-download)
         if (!hasAsset(expectedRootfsAsset)) {
             println("SKIP: $expectedRootfsAsset not in assets")
