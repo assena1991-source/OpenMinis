@@ -1,45 +1,55 @@
-# Android 32-bit (ARMv7) port plan
+# Android 32-bit (ARMv7) port status
 
-This fork tracks the work needed to add 32-bit ARM Android support without
-breaking the existing 64-bit ARM build.
+This branch adds initial ARMv7 build plumbing while preserving the existing
+ARM64 default. It is **not yet a verified, end-to-end 32-bit port**.
 
-## Current baseline
+## Changes implemented on this branch
 
-The public upstream build is 64-bit ARM only:
+- `src/android/app/build.gradle.kts` now includes both `arm64-v8a` and
+  `armeabi-v7a` in the NDK ABI filters and keeps the PRoot assets uncompressed.
+- `deps/build_proot.sh` accepts `OPENMINIS_ANDROID_ABI=arm64-v8a` (default) or
+  `OPENMINIS_ANDROID_ABI=armeabi-v7a`. It selects the NDK target, output
+  asset/JNI directory, and expected ELF machine accordingly. For ARMv7 it
+  verifies and stages the vendored Termux ARM32 loader as the ABI's
+  `libproot-loader.so` instead of rebuilding that loader from the fork.
+- `scripts/prepare_android_sandbox.sh` selects Alpine `aarch64` or `armhf`
+  and names the rootfs and PRoot assets separately.
+- `deps/build_rclone_android.sh` accepts the same ABI variable and builds
+  `android/arm64` or `android/arm` into a correspondingly named AAR.
 
-- `src/android/app/build.gradle.kts` filters native APK libraries to
-  `arm64-v8a`.
-- `deps/build_proot.sh` cross-compiles PRoot with the
-  `aarch64-linux-android` NDK target and installs an aarch64 guest launcher.
-- `scripts/prepare_android_sandbox.sh` downloads the Alpine **aarch64**
-  minirootfs.
-- `deps/build_rclone_android.sh` builds the Go mobile binding for
-  `android/arm64`.
+Example ARMv7 build-asset preparation:
 
-Changing only Gradle's ABI filter would produce an APK with missing or
-incompatible native dependencies; it would not be a working 32-bit port.
+```sh
+export OPENMINIS_ANDROID_ABI=armeabi-v7a
+./deps/build_proot.sh
+./scripts/prepare_android_sandbox.sh
+./deps/build_rclone_android.sh
+```
 
-## Required implementation
+The default remains ARM64 if `OPENMINIS_ANDROID_ABI` is unset.
 
-1. Add an explicit ARMv7 build target (`armeabi-v7a`) while retaining the
-   current `arm64-v8a` target.
-2. Make the PRoot build select the NDK triple and output JNI directory from the
-   selected ABI, and verify the resulting ELF machine type.
-3. Build the PRoot ELF loaders for ARMv7 as well as the existing ARM64 loaders.
-4. Prepare an Alpine `armhf` root filesystem for the 32-bit guest, and select
-   the matching rootfs and PRoot asset at runtime.
-5. Build the rclone binding for Android ARM (`gomobile -target=android/arm`)
-   and ensure the resulting AAR contains the expected ABI.
-6. Audit other bundled/native dependencies and Kotlin/JNI assumptions for
-   32-bit pointer size, then run Gradle unit tests and an on-device shell smoke
-   test (a command must return exit code 0).
+## Remaining blockers before this can be called supported
+
+1. **Runtime selection is not wired yet.** App code must select the matching
+   PRoot binary and rootfs for the device/process ABI. Merely staging both
+   assets does not make the app use the ARMv7 pair.
+2. **The rclone AAR is not automatically switched by Gradle.** The generated
+   `rclone-armeabi-v7a.aar` must be integrated into the Android build in a
+   reproducible way, without dropping ARM64 support.
+3. **Audit bundled AAR/native payloads.** The current VAD/ONNX dependency and
+   any other prebuilt native libraries must be checked for `armeabi-v7a`
+   support. An ABI filter cannot manufacture missing native binaries.
+4. Verify the ARM32 loader's runtime behavior with the PRoot build on a real
+   32-bit device; validate the Alpine `armhf` URL and ELF execution.
+5. Run Gradle unit tests, inspect APK contents for both ABIs, and perform an
+   on-device shell smoke test where a command exits with status 0.
 
 ## Acceptance criteria
 
-- The existing `arm64-v8a` build continues to work unchanged.
+- The existing `arm64-v8a` build and sandbox continue to work unchanged.
 - A 32-bit ARM device can install and launch the app.
 - The embedded Linux shell starts and executes a command successfully.
-- The APK contains the correct ARMv7 JNI libraries and no ARM64-only native
-  payload is required by the 32-bit process.
+- Every required native dependency is present for the selected ABI.
 
-This document is a port checklist, not a claim that ARMv7 support is complete.
+Until the runtime selection, dependency audit, and device tests above pass,
+ARMv7 support should be treated as experimental rather than complete.
