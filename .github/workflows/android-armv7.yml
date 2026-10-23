@@ -91,7 +91,12 @@ jobs:
           grep -Fx "assets/alpine-minirootfs.tar.gz" <<< "$listing"
           grep -Fx "assets/alpine-minirootfs-armv7.tar.gz" <<< "$listing"
           for abi in arm64-v8a armeabi-v7a; do
+            # The VAD JNI library loads ONNX Runtime and WebRTC APM at runtime.
+            # Verify all three payloads per ABI; a successful Kotlin compile alone
+            # would not catch a missing native dependency on 32-bit devices.
             grep -Fx "lib/$abi/libRealtimeCutVadLibrary.so" <<< "$listing"
+            grep -Fx "lib/$abi/libonnxruntime.so" <<< "$listing"
+            grep -Fx "lib/$abi/libwebrtc-audio-processing-1.so" <<< "$listing"
           done
 
       - name: Upload validated universal debug APK
