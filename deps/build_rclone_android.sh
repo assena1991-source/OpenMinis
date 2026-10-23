@@ -17,6 +17,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$ROOT/deps/rclone-mobile"
 BUILD="$ROOT/deps/build/rclone"
+TARGET_ABI="${OPENMINIS_ANDROID_ABI:-arm64-v8a}"
+case "$TARGET_ABI" in
+  arm64-v8a) GOMOBILE_TARGET="android/arm64" ;;
+  armeabi-v7a) GOMOBILE_TARGET="android/arm" ;;
+  *) echo "error: unsupported OPENMINIS_ANDROID_ABI='$TARGET_ABI' (expected arm64-v8a or armeabi-v7a)" >&2; exit 1 ;;
+esac
 
 command -v go >/dev/null || { echo "error: go toolchain not found" >&2; exit 1; }
 command -v gomobile >/dev/null || {
@@ -31,14 +37,14 @@ command -v gomobile >/dev/null || {
 mkdir -p "$BUILD"
 cd "$SRC"
 
-# arm64-v8a only, matching the app's existing ndk abiFilters.
+# Build one ABI per invocation, matching OPENMINIS_ANDROID_ABI in build_proot.sh.
 gomobile bind -v \
-  -target=android/arm64 \
+  -target="$GOMOBILE_TARGET" \
   -androidapi 24 \
   -javapkg=com.openminis.rclone \
   -ldflags="-s -w" \
-  -o "$BUILD/rclone.aar" \
+  -o "$BUILD/rclone-$TARGET_ABI.aar" \
   ./gomobile
 
-echo "==> $BUILD/rclone.aar"
-du -sh "$BUILD/rclone.aar" | awk '{print "    size:", $1}'
+echo "==> $BUILD/rclone-$TARGET_ABI.aar"
+du -sh "$BUILD/rclone-$TARGET_ABI.aar" | awk '{print "    size:", $1}'
