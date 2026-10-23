@@ -57,7 +57,7 @@ android {
         )
 
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
 
         externalNativeBuild {
@@ -135,7 +135,7 @@ android {
     }
 
     androidResources {
-        noCompress += listOf("tar.gz", "proot-aarch64")
+        noCompress += listOf("tar.gz", "proot-aarch64", "proot-armv7")
     }
 
     testOptions {
