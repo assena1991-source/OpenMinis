@@ -43,7 +43,6 @@ class RootfsManagerInstrumentedTest {
 
         // Clean up from previous test runs
         manager.rootfsDir.deleteRecursively()
-        manager.prootBinary.parentFile?.deleteRecursively()
     }
 
     @After
