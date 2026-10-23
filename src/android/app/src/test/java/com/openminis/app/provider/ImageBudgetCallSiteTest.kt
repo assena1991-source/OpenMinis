@@ -50,7 +50,7 @@ class ImageBudgetCallSiteTest {
         val callIdx = streamCall!!.range.first
         val window = loop.substring(callIdx, minOf(loop.length, callIdx + 1200))
         assertTrue("outgoing history must be budgeted", window.contains("applyRequestImageBudget("))
-        assertTrue("budget wraps the effective history", window.contains("effectiveAgentHistory()"))
+        assertTrue("budget wraps the prepared outbound history", window.contains("outboundHistory"))
         assertTrue("byte audit sits outermost", window.contains("auditOutgoingPayload("))
         // Retry + fallback paths re-enter the same loop.
         assertTrue(loop.contains("while (!collectDone)"))
