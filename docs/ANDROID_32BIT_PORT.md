@@ -14,8 +14,12 @@ ARM64 default. It is **not yet a verified, end-to-end 32-bit port**.
   `libproot-loader.so` instead of rebuilding that loader from the fork.
 - `scripts/prepare_android_sandbox.sh` selects Alpine `aarch64` or `armhf`
   and names the rootfs and PRoot assets separately.
-- `deps/build_rclone_android.sh` accepts the same ABI variable and builds
-  `android/arm64` or `android/arm` into a correspondingly named AAR.
+- `RootfsManager` now selects the rootfs asset and `.arch` marker based on the
+  running Android process bitness. The native PRoot executable is selected by
+  Android's `nativeLibraryDir` ABI extraction.
+- `deps/build_rclone_android.sh` now builds one AAR targeting both `android/arm`
+  and `android/arm64`, and stages it at `src/android/app/libs/rclone.aar` for
+  the existing Gradle local-AAR dependency.
 
 Example ARMv7 build-asset preparation:
 
@@ -30,19 +34,14 @@ The default remains ARM64 if `OPENMINIS_ANDROID_ABI` is unset.
 
 ## Remaining blockers before this can be called supported
 
-1. **Runtime selection is not wired yet.** App code must select the matching
-   PRoot binary and rootfs for the device/process ABI. Merely staging both
-   assets does not make the app use the ARMv7 pair.
-2. **The rclone AAR is not automatically switched by Gradle.** The generated
-   `rclone-armeabi-v7a.aar` must be integrated into the Android build in a
-   reproducible way, without dropping ARM64 support.
-3. **Audit bundled AAR/native payloads.** The current VAD/ONNX dependency and
-   any other prebuilt native libraries must be checked for `armeabi-v7a`
-   support. An ABI filter cannot manufacture missing native binaries.
-4. Verify the ARM32 loader's runtime behavior with the PRoot build on a real
+1. **Bundled native dependency audit remains.** The VAD/ONNX AAR and any other
+   prebuilt native libraries must be checked for `armeabi-v7a` support. An ABI
+   filter cannot manufacture missing native binaries; the existing VAD comment
+   indicates ARM64-only native packaging and must be resolved before release.
+2. Verify the ARM32 loader's runtime behavior with the PRoot build on a real
    32-bit device; validate the Alpine `armhf` URL and ELF execution.
-5. Run Gradle unit tests, inspect APK contents for both ABIs, and perform an
-   on-device shell smoke test where a command exits with status 0.
+3. Run the NDK/Go/Gradle build, inspect APK contents for both ABIs, and perform
+   an on-device shell smoke test where a command exits with status 0.
 
 ## Acceptance criteria
 
