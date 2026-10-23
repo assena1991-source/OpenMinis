@@ -90,4 +90,6 @@ jobs:
           grep -Fx "assets/proot-armv7" <<< "$listing"
           grep -Fx "assets/alpine-minirootfs.tar.gz" <<< "$listing"
           grep -Fx "assets/alpine-minirootfs-armv7.tar.gz" <<< "$listing"
-          grep -E '^lib/(arm64-v8a|armeabi-v7a)/libRealtimeCutVadLibrary.so$' <<< "$listing"
+          for abi in arm64-v8a armeabi-v7a; do
+            grep -Fx "lib/$abi/libRealtimeCutVadLibrary.so" <<< "$listing"
+          done
