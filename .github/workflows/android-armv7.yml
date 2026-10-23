@@ -72,7 +72,7 @@ jobs:
 
       - name: Run unit tests and build APK
         working-directory: src/android
-        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest
 
       - name: Verify APK contains both ABIs and sandbox assets
         working-directory: src/android
