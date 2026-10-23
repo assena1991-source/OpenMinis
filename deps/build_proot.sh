@@ -54,10 +54,30 @@ PROOT_DIR="$SCRIPT_DIR/proot"
 TALLOC_DIR="$SCRIPT_DIR/talloc"
 BUILD_DIR="$SCRIPT_DIR/build/proot-android"
 ASSETS_DIR="$PROJECT_ROOT/src/android/app/src/main/assets"
-OUTPUT_BIN="$ASSETS_DIR/proot-aarch64"
+
+# Select the host ABI explicitly. Keep ARM64 as the default so existing build
+# invocations remain byte-for-byte compatible in intent.
+TARGET_ABI="${OPENMINIS_ANDROID_ABI:-arm64-v8a}"
+case "$TARGET_ABI" in
+    arm64-v8a)
+        NDK_TRIPLE="aarch64-linux-android"
+        EXPECTED_ARCH="aarch64"
+        OUTPUT_BIN="$ASSETS_DIR/proot-aarch64"
+        JNILIBS_DIR="$PROJECT_ROOT/src/android/app/src/main/jniLibs/arm64-v8a"
+        ;;
+    armeabi-v7a)
+        NDK_TRIPLE="armv7a-linux-androideabi"
+        EXPECTED_ARCH="elf32-littlearm"
+        OUTPUT_BIN="$ASSETS_DIR/proot-armv7"
+        JNILIBS_DIR="$PROJECT_ROOT/src/android/app/src/main/jniLibs/armeabi-v7a"
+        ;;
+    *)
+        echo "Unsupported OPENMINIS_ANDROID_ABI='$TARGET_ABI' (expected arm64-v8a or armeabi-v7a)" >&2
+        exit 1
+        ;;
+esac
 # The APK also ships proot as a native library (extracted to
 # app's nativeLibraryDir at install time). Keep both in sync.
-JNILIBS_DIR="$PROJECT_ROOT/src/android/app/src/main/jniLibs/arm64-v8a"
 JNILIBS_BIN="$JNILIBS_DIR/libproot.so"
 
 # talloc version pinned to a known-good release. Single-file build avoids
@@ -67,8 +87,7 @@ TALLOC_TARBALL_URL="https://download.samba.org/pub/talloc/talloc-${TALLOC_VERSIO
 
 # Android target. minSdk=26 in src/android/app/build.gradle.kts.
 ANDROID_API=26
-ANDROID_ABI="arm64-v8a"
-NDK_TRIPLE="aarch64-linux-android"
+ANDROID_ABI="$TARGET_ABI"
 
 # ----------------------------------------------------------------------------
 # Log helpers
@@ -264,7 +283,7 @@ build_proot() {
         log_error "PRoot source missing at $PROOT_DIR. Did you clone OpenMinis/proot?"
     fi
 
-    log_info "Building proot (aarch64)..."
+    log_info "Building proot ($TARGET_ABI)..."
 
     # proot's GNUmakefile has a quirk where `-f <path>` out-of-tree builds
     # double-prefix source paths via $(SRC)$<. Simpler to build in-tree under
@@ -300,9 +319,9 @@ build_proot() {
 
     "$STRIP" "$built"
 
-    # Sanity-check: ELF aarch64 shared-object (PIE)
-    if ! "$OBJDUMP" -a "$built" | grep -q 'aarch64'; then
-        log_error "Output is not aarch64 ELF"
+    # Verify the machine type before installing; never package a mismatched ELF.
+    if ! "$OBJDUMP" -a "$built" | grep -q "$EXPECTED_ARCH"; then
+        log_error "Output is not the expected $TARGET_ABI ELF ($EXPECTED_ARCH)"
     fi
 
     log_success "proot built: $built ($(du -h "$built" | awk '{print $1}'))"
@@ -349,41 +368,56 @@ install_asset() {
     # Only files matching lib/**/*.so are extracted to nativeLibraryDir, so
     # the .so suffix is load-bearing here even though these are executables,
     # not shared objects.
-    # ── DO NOT install the fork-built loaders. ────────────────────────────
-    #
-    # The loaders that ship are VENDORED TERMUX BUILDS (proot 5.1.107-70),
-    # tracked in git as an explicit exception to the no-binaries rule; this
-    # script only VERIFIES them. History, because this has now bitten twice:
-    #
-    #  * bc2566b2 untracked all jniLibs binaries; a25d93f7 then rebuilt the
-    #    loaders from deps/proot and installed them here, believing them
-    #    "identical modulo stripping" to the deleted ones. They are not: the
-    #    deleted ones were Termux's builds, which carry Android-specific
-    #    loader patches our deps/proot fork does not have.
-    #  * Pairing our proot with the FORK-built loader works on some devices
-    #    (Pixel 4a / Android 13) but SEGVs the guest's first instruction on
-    #    others (OnePlus 7 Pro / crDroid 12.11, rooted: "proot info: vpid 1:
-    #    terminated with signal 11", proot exit=255). The Termux pair works
-    #    fleet-wide and did so through 0.20.
-    #  * The exact Termux deb has been rotated out of packages.termux.dev
-    #    (404), so these bytes can be neither re-downloaded nor rebuilt from
-    #    anything in this tree. The git copies are the only source.
-    #
-    # To ever go back to fork-built loaders: first port Termux's loader
-    # patches into deps/proot, then verify on a non-stock ROM (the Pixel
-    # passing is exactly what hid this regression).
-    local want64="44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04"
-    local want32="25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34"
-    local have64 have32
-    have64=$(shasum -a 256 "$JNILIBS_DIR/libproot-loader.so" 2>/dev/null | awk '{print $1}')
-    have32=$(shasum -a 256 "$JNILIBS_DIR/libproot-loader32.so" 2>/dev/null | awk '{print $1}')
-    if [ "$have64" != "$want64" ]; then
-        log_error "libproot-loader.so is NOT the vendored Termux build (sha256=${have64:-missing}). Restore: git checkout -- src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so"
+    if [ "$TARGET_ABI" = "armeabi-v7a" ]; then
+        # The existing ARM64 APK already vendors the known-good Termux ARM32
+        # loader as libproot-loader32.so. Reuse those exact bytes as the native
+        # loader for an ARMv7 process; do not rebuild it from the PRoot fork.
+        local source_loader="$PROJECT_ROOT/src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so"
+        local want32="25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34"
+        local have32
+        have32=$(shasum -a 256 "$source_loader" 2>/dev/null | awk '{print $1}')
+        if [ "$have32" != "$want32" ]; then
+            log_error "Known-good Termux ARM32 loader missing or changed: $source_loader"
+        fi
+        install -m 0755 "$source_loader" "$JNILIBS_DIR/libproot-loader.so"
+        log_success "Installed verified ARM32 Termux loader for $TARGET_ABI"
+    else
+        # ── DO NOT install the fork-built loaders. ────────────────────────────
+        #
+        # The loaders that ship are VENDORED TERMUX BUILDS (proot 5.1.107-70),
+        # tracked in git as an explicit exception to the no-binaries rule; this
+        # script only VERIFIES them. History, because this has now bitten twice:
+        #
+        #  * bc2566b2 untracked all jniLibs binaries; a25d93f7 then rebuilt the
+        #    loaders from deps/proot and installed them here, believing them
+        #    "identical modulo stripping" to the deleted ones. They are not: the
+        #    deleted ones were Termux's builds, which carry Android-specific
+        #    loader patches our deps/proot fork does not have.
+        #  * Pairing our proot with the FORK-built loader works on some devices
+        #    (Pixel 4a / Android 13) but SEGVs the guest's first instruction on
+        #    others (OnePlus 7 Pro / crDroid 12.11, rooted: "proot info: vpid 1:
+        #    terminated with signal 11", proot exit=255). The Termux pair works
+        #    fleet-wide and did so through 0.20.
+        #  * The exact Termux deb has been rotated out of packages.termux.dev
+        #    (404), so these bytes can be neither re-downloaded nor rebuilt from
+        #    anything in this tree. The git copies are the only source.
+        #
+        # To ever go back to fork-built loaders: first port Termux's loader
+        # patches into deps/proot, then verify on a non-stock ROM (the Pixel
+        # passing is exactly what hid this regression).
+        local want64="44ef39c1e1a18c09f6e4c4b5d6f8bba82d30596598bd155ec162d05c5122ff04"
+        local want32="25f6bd90bc5a3d3088026289a0d3eaf3e502bd2b00e5cb74fadd9791132efa34"
+        local have64 have32
+        have64=$(shasum -a 256 "$JNILIBS_DIR/libproot-loader.so" 2>/dev/null | awk '{print $1}')
+        have32=$(shasum -a 256 "$JNILIBS_DIR/libproot-loader32.so" 2>/dev/null | awk '{print $1}')
+        if [ "$have64" != "$want64" ]; then
+            log_error "libproot-loader.so is NOT the vendored Termux build (sha256=${have64:-missing}). Restore: git checkout -- src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so"
+        fi
+        if [ "$have32" != "$want32" ]; then
+            log_error "libproot-loader32.so is NOT the vendored Termux build (sha256=${have32:-missing}). Restore: git checkout -- src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so"
+        fi
+        log_success "Verified vendored Termux loaders (sha256-pinned): libproot-loader.so, libproot-loader32.so"
     fi
-    if [ "$have32" != "$want32" ]; then
-        log_error "libproot-loader32.so is NOT the vendored Termux build (sha256=${have32:-missing}). Restore: git checkout -- src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so"
-    fi
-    log_success "Verified vendored Termux loaders (sha256-pinned): libproot-loader.so, libproot-loader32.so"
 }
 
 # ----------------------------------------------------------------------------
@@ -407,13 +441,12 @@ verify_artifacts() {
     # expected ELF machine: the 32-bit loader really is 32-bit ARM (it exists
     # to run 32-bit guest binaries), so demanding aarch64 of it is wrong.
     local required=(
-        "$OUTPUT_BIN:100000:aarch64"
-        "$JNILIBS_BIN:100000:aarch64"
-        "$JNILIBS_DIR/libproot-loader.so:4000:aarch64"
+        "$OUTPUT_BIN:100000:$EXPECTED_ARCH"
+        "$JNILIBS_BIN:100000:$EXPECTED_ARCH"
+        "$JNILIBS_DIR/libproot-loader.so:2000:$EXPECTED_ARCH"
     )
-    # 32-bit loader is genuinely optional (Alpine aarch64 is pure 64-bit), so
-    # it is checked only when present rather than being required.
-    if [ -f "$JNILIBS_DIR/libproot-loader32.so" ]; then
+    # The optional 32-bit guest loader is only relevant to the ARM64 build.
+    if [ "$TARGET_ABI" = "arm64-v8a" ] && [ -f "$JNILIBS_DIR/libproot-loader32.so" ]; then
         required+=("$JNILIBS_DIR/libproot-loader32.so:2000:elf32-littlearm")
     fi
 
@@ -448,7 +481,7 @@ verify_artifacts() {
         log_error "Artifact verification failed — the APK built from this tree would have a broken sandbox (shell commands would return '[Shell not running]'). Fix the errors above and rerun."
     fi
 
-    log_success "All sandbox artifacts present and valid"
+    log_success "All $TARGET_ABI PRoot artifacts present and valid"
 }
 
 # ----------------------------------------------------------------------------
