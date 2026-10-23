@@ -88,7 +88,7 @@ class ModelSearchTest {
         val r = ModelSearch.search(
             listOf("host.example.com" to listOf(entry("/models/Qwen3.8-27B.gguf")), "Other" to listOf(entry("gpt-5"))),
             label = { it },
-            query = "wsen",
+            query = "host",
         )
         assertEquals(listOf("host.example.com"), r.sections.map { it.key })
         assertEquals(1, r.sections.single().entries.size)
