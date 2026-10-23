@@ -101,10 +101,13 @@ class ViewModelInitOrderTest {
         // Class-body properties declared after `init` with a plain initialiser.
         // `by lazy` is exempt: it resolves on first read, not in declaration
         // order, which is exactly the hazard being tested for.
+        // Stop at the ChatViewModel class closing brace; scanning later top-level
+        // helpers (e.g. warmUpBudget) creates false positives for local variables.
+        val classEnd = (init until lines.size).firstOrNull { lines[it] == "}" } ?: lines.size
         val offenders = mutableListOf<String>()
         for ((i, line) in lines.withIndex()) {
             val lineNo = i + 1
-            if (lineNo <= init) continue
+            if (lineNo <= init || i >= classEnd) continue
             val m = Regex("""^    (?:private |internal )?(?:val|var) (\w+)\s*(?::[^=]+)?=""")
                 .find(line) ?: continue
             if ("by lazy" in line) continue
