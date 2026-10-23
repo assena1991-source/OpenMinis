@@ -82,9 +82,18 @@ jobs:
           apk="app/build/outputs/apk/debug/app-debug.apk"
           test -f "$apk"
           listing="$(unzip -Z1 "$apk")"
+          tmp_elf="$(mktemp)"
+          trap 'rm -f "$tmp_elf"' EXIT
           for abi in arm64-v8a armeabi-v7a; do
             grep -Fx "lib/$abi/libproot.so" <<< "$listing"
             grep -Fx "lib/$abi/libproot-loader.so" <<< "$listing"
+            # Confirm the ELF machine matches the APK ABI directory, not just its filename.
+            unzip -p "$apk" "lib/$abi/libproot.so" > "$tmp_elf"
+            if [ "$abi" = "arm64-v8a" ]; then
+              file "$tmp_elf" | grep -E "ELF 64-bit.*ARM aarch64"
+            else
+              file "$tmp_elf" | grep -E "ELF 32-bit.*ARM"
+            fi
           done
           grep -Fx "assets/proot-aarch64" <<< "$listing"
           grep -Fx "assets/proot-armv7" <<< "$listing"
