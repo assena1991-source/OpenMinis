@@ -34,14 +34,12 @@ The default remains ARM64 if `OPENMINIS_ANDROID_ABI` is unset.
 
 ## Remaining blockers before this can be called supported
 
-1. **Bundled native dependency audit remains.** The VAD/ONNX AAR and any other
-   prebuilt native libraries must be checked for `armeabi-v7a` support. An ABI
-   filter cannot manufacture missing native binaries; the existing VAD comment
-   indicates ARM64-only native packaging and must be resolved before release.
+1. Verify that every resolved native dependency, especially the VAD/ONNX AAR,
+   actually contains its `armeabi-v7a` library. The new CI job checks this in the
+   built APK; an upstream build declaration alone is not sufficient proof.
 2. Verify the ARM32 loader's runtime behavior with the PRoot build on a real
-   32-bit device; validate the Alpine `armhf` URL and ELF execution.
-3. Run the NDK/Go/Gradle build, inspect APK contents for both ABIs, and perform
-   an on-device shell smoke test where a command exits with status 0.
+   32-bit device and perform an on-device shell smoke test where a command
+   exits with status 0.
 
 ## Acceptance criteria
 
