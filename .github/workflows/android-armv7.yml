@@ -114,8 +114,10 @@ jobs:
           done
           grep -Fx "assets/proot-aarch64" <<< "$listing"
           grep -Fx "assets/proot-armv7" <<< "$listing"
-          grep -Fx "assets/alpine-minirootfs.tar.gz" <<< "$listing"
-          grep -Fx "assets/alpine-minirootfs-armv7.tar.gz" <<< "$listing"
+          # AAPT strips the final .gz suffix from gzip assets in the APK;
+          # RootfsManager supports these resulting .tar asset names.
+          grep -Fx "assets/alpine-minirootfs.tar" <<< "$listing"
+          grep -Fx "assets/alpine-minirootfs-armv7.tar" <<< "$listing"
           for abi in arm64-v8a armeabi-v7a; do
             # The VAD JNI library loads ONNX Runtime and WebRTC APM at runtime.
             # Verify all three payloads per ABI; a successful Kotlin compile alone
